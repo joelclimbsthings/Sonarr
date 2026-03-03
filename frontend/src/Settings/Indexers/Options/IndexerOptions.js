@@ -98,6 +98,24 @@ function IndexerOptions(props) {
                 {...settings.rssSyncInterval}
               />
             </FormGroup>
+
+            <FormGroup
+              advancedSettings={advancedSettings}
+              isAdvanced={true}
+            >
+              <FormLabel>{translate('SearchDelay')}</FormLabel>
+
+              <FormInputGroup
+                type={inputTypes.NUMBER}
+                name="searchDelay"
+                min={0}
+                max={60}
+                unit="seconds"
+                helpText={translate('SearchDelayHelpText')}
+                onChange={onInputChange}
+                {...settings.searchDelay}
+              />
+            </FormGroup>
           </Form>
       }
     </FieldSet>

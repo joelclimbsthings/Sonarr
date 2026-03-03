@@ -19,6 +19,9 @@ namespace Sonarr.Api.V3.Config
 
             SharedValidator.RuleFor(c => c.RssSyncInterval)
                            .IsValidRssSyncInterval();
+
+            SharedValidator.RuleFor(c => c.SearchDelay)
+                           .InclusiveBetween(0, 60);
         }
 
         protected override IndexerConfigResource ToResource(IConfigService model)

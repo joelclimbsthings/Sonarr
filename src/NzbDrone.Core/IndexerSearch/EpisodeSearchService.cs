@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.DecisionEngine;
 using NzbDrone.Core.Download;
@@ -23,6 +25,7 @@ namespace NzbDrone.Core.IndexerSearch
         private readonly IEpisodeService _episodeService;
         private readonly IEpisodeCutoffService _episodeCutoffService;
         private readonly IQueueService _queueService;
+        private readonly IConfigService _configService;
         private readonly Logger _logger;
 
         public EpisodeSearchService(ISearchForReleases releaseSearchService,
@@ -30,6 +33,7 @@ namespace NzbDrone.Core.IndexerSearch
                                     IEpisodeService episodeService,
                                     IEpisodeCutoffService episodeCutoffService,
                                     IQueueService queueService,
+                                    IConfigService configService,
                                     Logger logger)
         {
             _releaseSearchService = releaseSearchService;
@@ -37,6 +41,7 @@ namespace NzbDrone.Core.IndexerSearch
             _episodeService = episodeService;
             _episodeCutoffService = episodeCutoffService;
             _queueService = queueService;
+            _configService = configService;
             _logger = logger;
         }
 
@@ -44,6 +49,7 @@ namespace NzbDrone.Core.IndexerSearch
         {
             _logger.ProgressInfo("Performing search for {0} episodes", episodes.Count);
             var downloadedCount = 0;
+            var searchDelay = userInvokedSearch ? 0 : _configService.SearchDelay * 1000;
             var groups = new List<EpisodeSearchGroup>();
 
             foreach (var series in episodes.GroupBy(e => e.SeriesId))
@@ -59,8 +65,17 @@ namespace NzbDrone.Core.IndexerSearch
                 }
             }
 
+            var isFirst = true;
+
             foreach (var group in groups.OrderBy(g => g.Episodes.Min(e => e.LastSearchTime ?? DateTime.MinValue)))
             {
+                if (!isFirst && searchDelay > 0)
+                {
+                    _logger.Info("Waiting {0} seconds before next search", searchDelay / 1000);
+                    await Task.Delay(searchDelay);
+                }
+
+                isFirst = false;
                 List<DownloadDecision> decisions;
 
                 var seriesId = group.SeriesId;
@@ -109,9 +124,21 @@ namespace NzbDrone.Core.IndexerSearch
 
         public void Execute(EpisodeSearchCommand message)
         {
+            var userInvokedSearch = message.Trigger == CommandTrigger.Manual;
+            var searchDelay = userInvokedSearch ? 0 : _configService.SearchDelay * 1000;
+            var isFirst = true;
+
             foreach (var episodeId in message.EpisodeIds)
             {
-                var decisions = _releaseSearchService.EpisodeSearch(episodeId, message.Trigger == CommandTrigger.Manual, false).GetAwaiter().GetResult();
+                if (!isFirst && searchDelay > 0)
+                {
+                    _logger.Info("Waiting {0} seconds before next search", searchDelay / 1000);
+                    Thread.Sleep(searchDelay);
+                }
+
+                isFirst = false;
+
+                var decisions = _releaseSearchService.EpisodeSearch(episodeId, userInvokedSearch, false).GetAwaiter().GetResult();
                 var processed = _processDownloadDecisions.ProcessDecisions(decisions).GetAwaiter().GetResult();
 
                 _logger.ProgressInfo("Episode search completed. {0} reports downloaded.", processed.Grabbed.Count);

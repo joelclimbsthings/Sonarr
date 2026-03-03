@@ -124,6 +124,12 @@ namespace NzbDrone.Core.Configuration
             set { SetValue("MinimumAge", value); }
         }
 
+        public int SearchDelay
+        {
+            get { return GetValueInt("SearchDelay", 5); }
+            set { SetValue("SearchDelay", value); }
+        }
+
         public ProperDownloadTypes DownloadPropersAndRepacks
         {
             get { return GetValueEnum("DownloadPropersAndRepacks", ProperDownloadTypes.PreferAndUpgrade); }

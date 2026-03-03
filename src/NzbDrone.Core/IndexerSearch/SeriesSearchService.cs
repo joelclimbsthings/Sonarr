@@ -1,8 +1,10 @@
 using System;
 using System.Linq;
+using System.Threading;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Tv;
@@ -15,18 +17,21 @@ namespace NzbDrone.Core.IndexerSearch
         private readonly IEpisodeService _episodeService;
         private readonly ISearchForReleases _releaseSearchService;
         private readonly IProcessDownloadDecisions _processDownloadDecisions;
+        private readonly IConfigService _configService;
         private readonly Logger _logger;
 
         public SeriesSearchService(ISeriesService seriesService,
                                    IEpisodeService episodeService,
                                    ISearchForReleases releaseSearchService,
                                    IProcessDownloadDecisions processDownloadDecisions,
+                                   IConfigService configService,
                                    Logger logger)
         {
             _seriesService = seriesService;
             _episodeService = episodeService;
             _releaseSearchService = releaseSearchService;
             _processDownloadDecisions = processDownloadDecisions;
+            _configService = configService;
             _logger = logger;
         }
 
@@ -35,6 +40,7 @@ namespace NzbDrone.Core.IndexerSearch
             var series = _seriesService.GetSeries(message.SeriesId);
             var downloadedCount = 0;
             var userInvokedSearch = message.Trigger == CommandTrigger.Manual;
+            var searchDelay = userInvokedSearch ? 0 : _configService.SearchDelay * 1000;
 
             if (series.Seasons.None(s => s.Monitored))
             {
@@ -47,8 +53,18 @@ namespace NzbDrone.Core.IndexerSearch
                                 e.AirDateUtc.Value.Before(DateTime.UtcNow))
                     .ToList();
 
+                var isFirst = true;
+
                 foreach (var episode in episodes)
                 {
+                    if (!isFirst && searchDelay > 0)
+                    {
+                        _logger.Info("Waiting {0} seconds before next search", searchDelay / 1000);
+                        Thread.Sleep(searchDelay);
+                    }
+
+                    isFirst = false;
+
                     var decisions = _releaseSearchService.EpisodeSearch(episode, userInvokedSearch, false).GetAwaiter().GetResult();
                     var processDecisions = _processDownloadDecisions.ProcessDecisions(decisions).GetAwaiter().GetResult();
                     downloadedCount += processDecisions.Grabbed.Count;
@@ -56,6 +72,8 @@ namespace NzbDrone.Core.IndexerSearch
             }
             else
             {
+                var isFirst = true;
+
                 foreach (var season in series.Seasons.OrderBy(s => s.SeasonNumber))
                 {
                     if (!season.Monitored)
@@ -63,6 +81,14 @@ namespace NzbDrone.Core.IndexerSearch
                         _logger.Debug("Season {0} of {1} is not monitored, skipping search", season.SeasonNumber, series.Title);
                         continue;
                     }
+
+                    if (!isFirst && searchDelay > 0)
+                    {
+                        _logger.Info("Waiting {0} seconds before next search", searchDelay / 1000);
+                        Thread.Sleep(searchDelay);
+                    }
+
+                    isFirst = false;
 
                     var decisions = _releaseSearchService.SeasonSearch(message.SeriesId, season.SeasonNumber, false, true, userInvokedSearch, false).GetAwaiter().GetResult();
                     var processDecisions = _processDownloadDecisions.ProcessDecisions(decisions).GetAwaiter().GetResult();

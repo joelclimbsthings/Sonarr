@@ -1814,6 +1814,8 @@
   "SearchIsNotSupportedWithThisIndexer": "Search is not supported with this indexer",
   "SearchMonitored": "Search Monitored",
   "SearchSelected": "Search Selected",
+  "SearchDelay": "Search Delay",
+  "SearchDelayHelpText": "Delay in seconds between search requests during automated searches. Increase to avoid triggering rate limits on indexers. Set to zero to disable.",
   "Season": "Season",
   "SeasonCount": "Season Count",
   "SeasonDetails": "Season Details",
