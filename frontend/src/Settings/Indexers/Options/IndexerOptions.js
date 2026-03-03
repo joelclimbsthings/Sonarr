@@ -89,7 +89,7 @@ function IndexerOptions(props) {
                 type={inputTypes.NUMBER}
                 name="rssSyncInterval"
                 min={0}
-                max={120}
+                max={720}
                 unit="minutes"
                 helpText={translate('RssSyncIntervalHelpText')}
                 helpTextWarning={translate('RssSyncIntervalHelpTextWarning')}
